@@ -72,11 +72,30 @@ Once approved it will return a "Bot User OAuth Token" which we will use later in
 
 ### Events Subscription 
 
+Next we will setup the events subscription.  Events require a Request URL be provided to catch the event posts when they occur. This application is using an Express/Node.JS server file to catch the events. To run the server locally, use nGrok to spin up a URL to redirect to your local host port. Here is some [documentaion](https://ngrok.com/docs) on how to get nGrok up and running locally. 
+
+![Screen Shot 2022-03-14 at 3 52 31 PM](https://user-images.githubusercontent.com/41496659/158274181-a72d1802-cb39-41f5-91da-24647557544f.png)
+
+Once the request URL is provided, subscribe to the events you would like to see. In this example we will be listing for `app_mentions`, `links_shared` and `reactions_added`. Each time a user does any of the actions in a channel where the bot is installed, we will receive an events payload to the request URL with all the information. 
+
+![Screen Shot 2022-03-14 at 3 57 22 PM](https://user-images.githubusercontent.com/41496659/158274258-1d895e7e-be00-419a-b0d6-7bde7e34fe87.png)
+
 
 ### Interactive Components 
 
-You should see the 
+One more item we need to add to the app to allow for interactive messaging. Turn on the "Interactivity" functionality and provide another request URL. This URL is different from the events URL endpoint. This request URL will receive the results from the interactive messages. 
 
+
+![Screen Shot 2022-03-14 at 4 02 23 PM](https://user-images.githubusercontent.com/41496659/158275109-7b641faf-612f-45bf-bdf2-ac6ef283df97.png)
+
+
+For our example it will be an "Approve" or "Decline" button that will contain meta-data about what was declined and why. 
+
+
+![Screen Shot 2022-03-14 at 4 06 06 PM](https://user-images.githubusercontent.com/41496659/158275089-9b24c0cb-04ab-4cc9-bc29-afce1dba5be6.png)
+
+
+### Building out APP file 
 
 To start, please setup your Slack Web Client and Event Listener.
 
