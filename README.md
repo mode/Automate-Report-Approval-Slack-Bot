@@ -250,7 +250,29 @@ let handleAppMention = async(event)=>{
 }
 ```
 
-The function contains a few cases within a switch statement to check the contain of the message it was mentioned within. Each case will parse out a report link and will return the report's metadata from the Mode API. From there depending on which case was triggered, the app will then use the following method to post a message.
+The function contains a few cases within a switch statement to check the contain of the message it was mentioned within. Each case will parse out a report link and will return the report's metadata from the Mode API. Here is a list of the current commands/flows built into the app. 
+
+@app push to review {add_link_to_report}
+
+This case will find the report link in the statement, parse out the report token, then use the token in a GET request to return the report details from the Mode API. From there it will validate the queries in the report to ensure that they do not contain a "Select \*" and that they point to database that is not the Mode Public Wareshouse. This can be changed to whatever database you want to validate against. The `queryChecker` function handles the validation and at present it is hardcoded to check against the MPW. To make that change, in the second conditional check, change the interger to the value(s) of the data connection(s) of your choice. Data connection IDs can be found [here](https://mode.com/developer/api-reference/management/data-sources/#listDataSources) via the API. (the MPW's id is 1)
+
+
+@app can you help me move a report 
+
+This case will return a message requesting the necessary details to run the above command.
+
+@app archive report {add_link_to_report}
+
+This case will take the report given and archive it within the Collection it currents sits within. 
+
+@app unarchive report {add_link_to_report}
+
+Will remove the app from the archived list. 
+
+
+These methods are just the default to get you started. You can create new cases by just copying one of the cases and giving it a string to look for within the app_mention event. 
+
+From there depending on which case was triggered, the app will then use the following method to post a message.
 
 `await slackClient.chat.postMessage({channel:event.channel,text:result2})`
 
