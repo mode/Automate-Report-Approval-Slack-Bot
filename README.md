@@ -100,7 +100,33 @@ For our example it will be an "Approve" or "Decline" button that will contain me
 ## Building out APP file 
 
 
-To start, please setup your Slack Web Client and Event Listener. The `app.js` file is using Node.js and Express for the server side request handling. Take a look at the `package.json1` file for the included dependencies. You may also fork this repo and pull the code down locally to make your own adjustments. All variables used in this application are stored in a `.env` file and added to the gitignore file to ensure safety of tokens. On line 3 of the code below, we use the library `dotenv` to connect our server script to the environment variables folder. See this [article](https://www.freecodecamp.org/news/how-to-use-node-environment-variables-with-a-dotenv-file-for-node-js-and-npm/) on how to get a `.env` file started. 
+Build out the `.env` file first so that we can store all the necessary variables in one place. To get this project up and running we will need the following variables assigned in the `.env` file. 
+
+
+
+PORT = THE_PORT_NUMBER_YOU_WOULD_LIKE_TO_USE
+//This can stay as is because this will be used to make Mode API calls
+base = https://app.mode.com/api/
+base2 = https://app.mode.com
+
+```
+// This is a bearer Token of the Mode API Key and Secret. To create a bearer token from the Mode API keys, visit this [site](https://www.blitter.se/utils/basic-authentication-header-generator/). 
+// To genereate API tokens in Mode, please see [here](https://mode.com/help/articles/api-reference/#generating-api-tokens)
+bearToken = ADD_BEARER_TOKEN
+slackSignInSecret = ADD_SLACK_SIGNING_SECRET
+botToken = ADD_BOT_OAUTH_TOKEN
+// This variable the name of the Slack Group that contain the users you would like to give access to approve report migrations
+adminSlackGroup = ADD_NAME_OF_SLACK_GROUP
+// This will be the emoji/reaction added to trigger the approval process
+slackEmoji = white_check_mark
+// This is the name of the Collection that you would like to act as PRODUCTIOn
+productionCollection = WLE Portal
+```
+
+Once these variables are in place, the app.js script will inject them into the functions. 
+
+To start, please setup your Slack Web Client and Event Listener. The `app.js` file is using Node.js and Express for the server side request handling. Take a look at the `package.json1` file for the included dependencies. You may also fork this repo and pull the code down locally to make your own adjustments. All variables used in this application are stored in a `.env` file and added to the gitignore file to ensure safety of tokens. On line 3 of the code below, we use the library `dotenv` to connect our server script to the environment variables folder. 
+
 
 > *NOTE*: Make sure to install `@slack/web-api` and `@slack/events-api` via the package manager of your choice. 
 
@@ -257,15 +283,15 @@ The function contains a few cases within a switch statement to check the contain
 This case will find the report link in the statement, parse out the report token, then use the token in a GET request to return the report details from the Mode API. From there it will validate the queries in the report to ensure that they do not contain a "Select \*" and that they point to database that is not the Mode Public Wareshouse. This can be changed to whatever database you want to validate against. The `queryChecker` function handles the validation and at present it is hardcoded to check against the MPW. To make that change, in the second conditional check, change the interger to the value(s) of the data connection(s) of your choice. Data connection IDs can be found [here](https://mode.com/developer/api-reference/management/data-sources/#listDataSources) via the API. (the MPW's id is 1)
 
 
-@app can you help me move a report 
+*_@app can you help me move a report _*
 
 This case will return a message requesting the necessary details to run the above command.
 
-@app archive report {add_link_to_report}
+*_@app archive report {add_link_to_report}_*
 
 This case will take the report given and archive it within the Collection it currents sits within. 
 
-@app unarchive report {add_link_to_report}
+*_@app unarchive report {add_link_to_report}_*
 
 Will remove the app from the archived list. 
 
@@ -277,3 +303,236 @@ From there depending on which case was triggered, the app will then use the foll
 `await slackClient.chat.postMessage({channel:event.channel,text:result2})`
 
 For more details on the possible parameters that the `postMessage` method from Slack, please see [here](https://api.slack.com/methods)
+
+### Reaction_Added
+
+```
+    (async()=>{
+
+        try{
+            const response = await slackClient.usergroups.list({include_users:true})
+            const message = await slackClient.conversations.replies({channel: event.item.channel,ts:event.item.ts})
+            let adminList = response.usergroups.filter(r => r.handle === process.env.adminSlackGroup)
+            if(event.reaction === process.env.slackEmoji && adminList[0].users.includes(event.user)){
+
+                let reportTokenNworkspace = findReportToken(message.messages[0].text);
+                if(reportTokenNworkspace){
+
+                
+                let workspace = reportTokenNworkspace[2]
+                let reportToken = reportTokenNworkspace[1].slice(0,-1)
+                let reportDetails = await getReportDetails(reportToken,workspace);
+                let collectionToken = await getCollections(workspace,process.env.productionCollection)
+                await slackClient.chat.postMessage({channel:event.item.channel,
+                "thread_ts":event.item.ts,
+                "text": "Move to Production?",
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Move to Production?",
+                            "emoji": true
+                        }
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "emoji": true,
+                                    "text": "Approve"
+                                },
+                                "style": "primary",
+                                "value": `{"adminList":"${adminList[0].users}","report_token":"${reportDetails.token}","requestedBy":"${message.messages[0].user}","work_space":"${workspace}","collection":{"name":"${collectionToken[0].name}","token":"${collectionToken[0].token}"}}`
+                            },
+                            {
+                                "type": "button",
+                                "text": {
+                                    "type": "plain_text",
+                                    "emoji": true,
+                                    "text": "Reject"
+                                },
+                                "style": "danger",
+                                "value": `{"report_token":"${reportDetails.token}","requestedBy":"${message.messages[0].user}","work_space":"${workspace}","collection":{"name":"${collectionToken[0].name}","token":"${collectionToken[0].token}"}}`
+                            }
+                        ]
+                    }
+                ]
+            })
+        } else {
+            console.log(message.messages[0].thread_ts)
+            await slackClient.chat.postMessage({channel:event.item.channel,"text":`Please make sure to add the :${process.env.slackEmoji}: to the initial message with the link`,"thread_ts":message.messages[0].thread_ts})
+
+
+        }
+
+            }
+
+
+
+        } catch(error) {
+            console.log(error.data)
+        }
+    })
+```
+
+This function will check who added the reaction, if the user is within a Slack group it will proceed to send a "Move to Production" interactive message to the same thread. The interactive message will contain an "approve" and "reject" button. If approved, the button will send a payload event to our `/message_response` endpoint. The endpoint logic will than retrieve the report details from the "Approve" action and move the report to the necessary Collection. 
+
+```
+app.post("/message_response",(req,res)=>{
+    let payload = JSON.parse(req.body.payload)
+
+    let value = JSON.parse(payload.actions[0].value)
+    let adminList = value.adminList.split(",")
+
+
+
+    if(adminList.includes(payload.user.id)){
+
+        if(payload.actions[0].text.text === "Approve"){
+            axios.post(payload.response_url,{ "replace_original": "true","text": `<@${value.requestedBy}> Your report has been approved and moved to Production`},{headers:{'Content-Type': 'application/json','Accept': 'application/hal+json',}})
+            .then((response)=>{
+                changeReportCollection(value.collection.token,value.report_token,value.work_space)
+
+            }).catch((error)=>{
+                console.log(error)
+            })
+        } else{
+            axios.post(payload.response_url,{ "replace_original": "true","text": `<@${value.requestedBy}> Your report has been rejected, please speak with Admin to discuss next steps.`},{headers:{'Content-Type': 'application/json','Accept': 'application/hal+json',}})
+            .then((response)=>{
+    
+            }).catch((error)=>{
+                console.log(error)
+             })
+        }
+    } else {
+        axios.post(payload.response_url,{ "thread_ts":payload.container.thread_ts,"replace_original": false, "text": `<@${payload.user.id}> you do not have access to approve reports.`},{headers:{'Content-Type': 'application/json','Accept': 'application/hal+json',}})
+        .then((response)=>{
+
+        }).catch((error)=>{
+            console.log(error)
+         })    }
+
+  })
+  ```
+  
+![Screen Shot 2022-03-14 at 4 06 06 PM](https://user-images.githubusercontent.com/41496659/158275089-9b24c0cb-04ab-4cc9-bc29-afce1dba5be6.png)
+
+Again the logic will check to see if a user from the designated Slack Group was the one to make the click event occur. If it is not, it will return a message stating that the user does not have access to approve the report. If they are within the group, the report will be moved and the interactive message will be replaced with a success message. 
+
+
+### Linked_Shared 
+
+```
+let respondToLinkPost =  async(event)=>{
+    try{
+        let reportToken = findReportToken(event.links[0].url)
+        let reportDetails = await getReportDetails(reportToken[1],reportToken[2]);
+        let collectionData = await getCollections(reportToken[2],"",reportDetails.space_token)
+        let queries = await getReportQueries(reportDetails._links.queries.href)
+        let creatorUsername = await parseUser(reportDetails._links.creator.href);
+        let rDatasourceNames =  "";
+
+        for (let i = 0; i< queries.length; i++){
+            if(queries[i].data_source_id === 1){
+                rDatasourceNames = rDatasourceNames + `Mode Public Warehouse,`
+
+            }
+            else{
+       
+                    let dataSource =  await getDataSource(queries[i].data_source_id,reportToken[2])
+                    rDatasourceNames = rDatasourceNames + `${dataSource[0].name},`
+
+            }
+        }
+
+
+
+        rDatasourceNames = Array.from(new Set(rDatasourceNames.split(','))).toString();
+        let githubLink = reportDetails.github_link?encodeURI(reportDetails.github_link):"This Report is Not Synced to Github";
+ 
+        await slackClient.chat.postMessage({channel:event.channel,text:`Report Name - ${reportDetails.name}`,
+        "thread_ts":event.message_ts,
+        "blocks": [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": "*Report Details*",
+                    "emoji": true
+                }
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": `*Report Name:*\n${reportDetails.name}`
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": `*Created by:*\n${creatorUsername}`
+                    }
+                ]
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": `*Current Collection:*\n${collectionData.name}`
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": `*Data Source(s):*\n${rDatasourceNames}`
+                    }
+                ]
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": `*Queries Count:*\n${queries.length}`
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": `*Github Sync:*\n${githubLink}`
+                    }
+                ]
+            },
+            // {
+            //     "type": "section",
+            //     "text": {
+            //         "type": "mrkdwn",
+            //         "text": ``
+            //     }
+            // }
+        ]
+    })
+    }catch(error){
+        console.log(error.data)
+    }
+};
+```
+
+This final event will track when links are posted into the channel. When a link from app.mode.com is shared in the channel, this function will return a message containing the report's details. The details include the report name, total queries, the creator, it's current collection and the data source(s) it queries. 
+
+![Screen Shot 2022-03-17 at 4 26 15 PM](https://user-images.githubusercontent.com/41496659/158910111-9427c8f9-c729-4779-ade3-c27f9f517b45.png)
+
+
+
+## Conclusion 
+
+You can run the app locally and use Ngrok as mentioned above to test it. Once ready, you can host the application either on a company server or a platform like Heroku. Please feel free to fork this repo and make PR requests or issues for improvements you would like to see in future versions. 
+
+HAPPY HACKING!! 
+
+
+
+  
+
+
